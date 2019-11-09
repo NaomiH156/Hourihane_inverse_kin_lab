@@ -1,10 +1,6 @@
 function output_thetas = inverse_kin(g_des)
 %Solves the inverse kinematics of the intellidex robot
 
-%THIS ISN'T WORKING BECAUSE g1*Pwhatever is trying to multiply a 4x4 matrix
-    %by a 3x1 vector.
-
-
 %Segment lengths, in inches
 L0 = -13;
 L1 = 14.7;
@@ -71,8 +67,10 @@ e1(1:3, 1:3) = Ry(-1*theta(2));
 e1(1:3, 4) = Psh;
 
 g2 = (e0*e1*e2*e3)^-1 * g1;
-
-[theta(5), theta(6)] = SP2_solver(w4, w5, Pe, g2*Pe, Pw);
+PArg = g2*[Pw_p;1];
+g2Pe = PArg(1:3);
+Ptp = [L2+L3+L4; L0; 0];
+[theta(5), theta(6)] = SP2_solver(w4, w5, Pw_p, g2Pe, Ptp);
 
 %account for offset in joint angles
 offset = [-0.003 -0.002 0 0 0 -1.571];
@@ -113,15 +111,14 @@ function [theta1, theta2] = SP2_solver(w1, w2, p, q, r)
 
     %C = position after rotation 1 but before rotation 2.
     %Z = vector from r to C.
-    I = eye(3);
     u = p-r;
     v = q-r;
     %Z = C - r, Z and C unknown
     %solve for alpha, beta, and gamma to calculate Z:
     %Z = alpha*w1 + beta*w2 + gamma*(w1 x w2)
-    beta = w2.'*u * (I - (w1.'*w2)*(w1.'*w2))^(-1);
-    alpha = w1.'*v - (w1.'*w2)*beta;
-    top = (norm(u))^2 - alpha^2 - beta^2 -2*alpha*beta*(w1.'*w2);
+    alpha = ((w1.'*w2)*w2.'*u - w1.'*v)/((w1.'*w2)^2 -1);
+    beta = ((w1.'*w2)*w1.'*v - w2.'*u)/((w1.'*w2)^2 -1);
+    top = (norm(u))^2 - alpha^2 - beta^2 - 2*alpha*beta*(w1.'*w2);
     bottom = (norm(cross(w1,w2)))^2;
     gamma = sqrt(top/bottom);
     Z = alpha*w1 + beta*w2 + gamma*(cross(w1,w2));
@@ -140,28 +137,28 @@ function theta = SP3_solver(w, p, q, d, r)
     %d = "delta" = distance
     %w, p, and q are all 3x1 vectors. d is a scalar.
 
-    u = p - r
-    v = q - r
-    uP = u - w*w.'*u %"u-prime"
-    vP = v - w*w.'*v %"v-prime"
-    dP2 = norm(d)^2 - norm(w.'*w*(q-p))^2
-    theta_0 = atan2(w.'*cross(uP,vP), uP.'*vP)
-    top = norm(uP)^2 + norm(vP)^2 - dP2
-    bottom = 2*norm(uP)*norm(vP)
-    phi = acos(top/bottom)    %THIS IS COMING OUT COMPLEX BECAUSE cos-1(top/bottom)
+    u = p - r;
+    v = q - r;
+    uP = u - w*w.'*u; %"u-prime"
+    vP = v - w*w.'*v; %"v-prime"
+    dP2 = norm(d)^2 - norm(w.'*(q-p))^2;
+    theta_0 = atan2(w.'*cross(uP,vP), uP.'*vP);
+    top = norm(uP)^2 + norm(vP)^2 - dP2;
+    bottom = 2*norm(uP)*norm(vP);
+    phi = acos(top/bottom);    %THIS IS COMING OUT COMPLEX BECAUSE cos-1(top/bottom)
                                 %IS COMPLEX IF TOP > BOTTOM
     
-    theta = theta_0 + phi
+    theta = theta_0 + phi;
     %theta = theta_0 - phi is also mathematically valid
     
 
 end
 
 %defining rotation matrices
-function R = Rx(theta)
-    R = eye(3);
-    R(2:3, 2:3) = [cos(theta) -sin(theta); sin(theta) cos(theta)];
-end
+% function R = Rx(theta)
+%     R = eye(3);
+%     R(2:3, 2:3) = [cos(theta) -sin(theta); sin(theta) cos(theta)];
+% end
 function R = Ry(theta)
     R = eye(3);
     R(1,:) = [cos(theta) 0 sin(theta)];
